@@ -1,5 +1,6 @@
 # Known Bugs
 #    - Friends Disappear if overlapping during grab.
+#    - Friends dont actually go away with .kill method. Need to remove sprite entirely if possible.
 
 import pygame
 import pygame.freetype
@@ -64,31 +65,34 @@ class SpriteRect(pygame.sprite.Sprite):   # Used to create the Menu, probably di
         self.active = False
 
 class Line(pygame.sprite.Sprite):   # Used to create the lines between nodes
-    def __init__(self, color, firstX, firstY, secondX, secondY,screenH,screenW):
+    def __init__(self, color, firstX, firstY, secondX, secondY):
         super().__init__()
         
-        self.image = pygame.Surface([screenH, screenW])
+        H = secondY - firstY
+        W = secondX - firstX
+        
+        self.image = pygame.Surface([abs(W), abs(H)])
         self.image.fill(BLACK)
         self.image.set_colorkey(BLACK)
+        self.color = color
+        self.firstX = firstX
+        self.firstY = firstY
+        self.secondX = secondX
+        self.secondY = secondY
+                
+        pygame.draw.line(self.image, self.color, (0, 0), (100, 100), LineWidth)
+        self.rect = self.image.get_rect() # Do we need this?
         
-#         if (secondX-firstX) < 0:
-#             actwidth = -1 * width
-#             actstartx = width
-#         else:
-#             actwidth = width
-#             actstartx = 0
-#         if (secondY-firstY) < 0:
-#             actheight = -1 * height
-#             actstarty = height
-#         else:
-#             actheight = height
-#             actstarty = 0
-        
-        pygame.draw.line(self.image, color, (firstX, firstY), (secondX, secondY), LineWidth)
-        self.rect = self.image.get_rect()
         self.id = ""
         self.drag = False
         self.active = False
+        self.connections = []
+        
+    def update(self):
+        
+        self.image.fill(BLACK)
+        pygame.draw.line(self.image, self.color, (self.firstX, self.firstY), (self.secondX, self.secondY), LineWidth)
+
         
 class Node(pygame.sprite.Sprite):
     def __init__(self, nodecolor, nodetextcolor, width, height, text, size):
@@ -131,6 +135,7 @@ def save_objects(obj): # Creates a csv file and writes the argument list into it
         with open("data.csv", 'w', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerows(obj)
+        print("Saved!")
     except Exception as ex:
         print("Error during writing csv file", ex)
         
@@ -160,9 +165,15 @@ def connect(prevSP, currSP, NodeGroup): # Looks up and grabs positions of previo
     finalp_x = finalp_x + NodeTotalSizeX/2
     finalp_y = finalp_y + NodeSizeY/2
     
-    print(startp_x, startp_y, finalp_x, finalp_y)
     return startp_x, startp_y, finalp_x, finalp_y
 
+def disconnect(text, NodeGroup):
+    for sprite in NodeGroup:
+        connectL = len(sprite.connections) # remove the other sprite's name from the 1st sprite's connection list.
+        for k in range(0,connectL):
+            if (sprite.connections[k] == text[0]) or (sprite.connections[k] == text[1]):
+                sprite.connections[k] = ""
+                
 # --- main function --- Runs Once
 def main(): 
     
@@ -183,6 +194,7 @@ def main():
     # - Create The Sprites -
     all_sprites_list = pygame.sprite.Group() # Creates group for all pygame sprites
     NodeGroup = pygame.sprite.Group()
+    LineGroup = pygame.sprite.Group()
     
     # Create Me
     me = Sprite(BLUE, meSizeX, meSizeY) # Calls Sprite class with args(color, width, height)
@@ -273,19 +285,60 @@ def main():
                             offset_x = sprite.rect.x - mouse_x # Gets an offset so dragging can be done relative to mouse pos
                             offset_y = sprite.rect.y - mouse_y
                             previousSpriteName = sprite.text
-                            print(previousSpriteName)
                         else:
                             sprite.active = False
+                 
+                if event.button == 2:
+                    for sprite in LineGroup:
+                        if sprite.rect.collidepoint(event.pos):
+                            disconnect(sprite.connections, NodeGroup) # Function pulls associated node names from line.connections & clears them.
+                            sprite.kill                            
+                            sprite.color = BLACK
+                            print("The line between ", sprite.connections[0], " and ", sprite.connections[1], " has been deleted.")
                             
                 if event.button == 3:
                     for sprite in NodeGroup:
                         if sprite.rect.collidepoint(event.pos):
+                            #try:
                             sprite.connections.append(previousSpriteName) # Add previous sprite name to current sprite's connections attribute list.
                             startp_x, startp_y, finalp_x, finalp_y = connect(previousSpriteName, sprite.text, NodeGroup) # Run function to determine positions of previous and current sprite. Should return 4 values - startp_x, startp_y, finalp_x, finalp_y                            
-                            LineSprite = Line(WHITE, startp_x, startp_y, finalp_x, finalp_y, screenH,screenW)
-                            LineSprite.rect = (0,0)
+                            LineSprite = Line(WHITE, startp_x, startp_y, finalp_x, finalp_y)
+                                        
+                            H = finalp_y - startp_y 
+                            W = finalp_x - startp_x
+                            if H > 0 and W > 0:
+                                LineSprite.firstX = 0
+                                LineSprite.firstY = 0
+                                LineSprite.secondX = abs(W)
+                                LineSprite.secondY = abs(H)
+                                LineSprite.rect.x, LineSprite.rect.y = (startp_x,startp_y)
+                            elif H < 0 and W > 0:
+                                LineSprite.firstX = 0
+                                LineSprite.firstY = abs(H)
+                                LineSprite.secondX = abs(W)
+                                LineSprite.secondY = 0
+                                LineSprite.rect.x, LineSprite.rect.y = (startp_x,finalp_y)
+                            elif H < 0 and W < 0:
+                                LineSprite.firstX = abs(W)
+                                LineSprite.firstY = abs(H)
+                                LineSprite.secondX = 0
+                                LineSprite.secondY = 0
+                                LineSprite.rect.x, LineSprite.rect.y = (finalp_x,finalp_y)
+                            elif H > 0 and W < 0:
+                                LineSprite.firstX = abs(W)
+                                LineSprite.firstY = 0
+                                LineSprite.secondX = 0
+                                LineSprite.secondY = abs(H)
+                                LineSprite.rect.x, LineSprite.rect.y = (finalp_x,startp_y)
+                                
+                            LineSprite.connections.append(previousSpriteName)
+                            LineSprite.connections.append(sprite.text)
                             all_sprites_list.add(LineSprite)
-                            
+                            LineGroup.add(LineSprite)
+                            print("The line from ", LineSprite.connections[0], " to ", LineSprite.connections[1], " has been added.")
+#                            except:
+#                                print("Please select a starting node.")
+
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
                     for sprite in all_sprites_list:
@@ -323,3 +376,6 @@ def main():
 
 # ---- Call The Function ----
 main()
+
+
+
