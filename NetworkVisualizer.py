@@ -1,11 +1,9 @@
 # Known Bugs
 #    - Friends Disappear if overlapping during grab.
-#    - Friends dont actually go away with .kill method. Need to remove sprite entirely if possible.
 
 import pygame
 import pygame.freetype
 import csv
-import sys
 
 # --- constants ---
 SURFACE_COLOR_BLACK = BLACK = (0,0,0)
@@ -89,10 +87,11 @@ class Line(pygame.sprite.Sprite):   # Used to create the lines between nodes
         self.connections = []
         
     def update(self):
-        
         self.image.fill(BLACK)
         pygame.draw.line(self.image, self.color, (self.firstX, self.firstY), (self.secondX, self.secondY), LineWidth)
-
+    
+    def clear(self):
+        self.image.fill(BLACK)
         
 class Node(pygame.sprite.Sprite):
     def __init__(self, nodecolor, nodetextcolor, width, height, text, size):
@@ -152,6 +151,7 @@ def load_objects(): # Opens a local csv file and extracts the data as a list. Co
         return False
 
 def connect(prevSP, currSP, NodeGroup): # Looks up and grabs positions of previous Sprite & current Sprite by name text.
+    #print(prevSP,currSP)
     for sprite in NodeGroup: # Pull all Node sprite location and text
         if prevSP == sprite.text:
             startp_x = sprite.rect.x
@@ -167,13 +167,14 @@ def connect(prevSP, currSP, NodeGroup): # Looks up and grabs positions of previo
     
     return startp_x, startp_y, finalp_x, finalp_y
 
-def disconnect(text, NodeGroup):
+def disconnect(text, NodeGroup):  # remove the other sprite's name from the 1st sprite's connection list.
+    print(text)
     for sprite in NodeGroup:
-        connectL = len(sprite.connections) # remove the other sprite's name from the 1st sprite's connection list.
-        for k in range(0,connectL):
+        for k in range(0,len(sprite.connections)):
             if (sprite.connections[k] == text[0]) or (sprite.connections[k] == text[1]):
-                sprite.connections[k] = ""
-                
+                sprite.connections.pop(k)
+                #print("The line between ", sprite.connections[0], " and ", sprite.connections[1], " has been deleted.")
+
 # --- main function --- Runs Once
 def main(): 
     
@@ -190,6 +191,7 @@ def main():
     screenW = screen.get_width() # Grab whatever screen size resulted from (0,0) above.
     menuBorder = ((screenW - (screenW / 6)),25) # Defines leftuppermost point of the menu
     UserText = "Type Name"
+    previousSpriteName = ""
     
     # - Create The Sprites -
     all_sprites_list = pygame.sprite.Group() # Creates group for all pygame sprites
@@ -221,7 +223,7 @@ def main():
         all_sprites_list.add(NodeSprite)
         NodeGroup.add(NodeSprite)
     else: # If there is a file uploaded successfully, load the position and text of all the nodes
-        for i in range(0,len(NodeGroupInfo)): # Clumsy method to strip out the 4 values of the csv sprite rect
+        for i in range(0,len(NodeGroupInfo)): # Clumsy method to strip out the 4 values of the csv sprite rect & draw the loaded nodes.
             NodeRect = str(NodeGroupInfo[i][0]) # First column (0) in csv matrix is the rect string
             #print(NodeRect) # Uncomment to have list of saved nodes printed to screen
             NodeRectStr = [0,0,0,0] # Will be filled with the 4 last character positions of the 4 position values (x, y, width, height) of each sprite rect.
@@ -249,6 +251,71 @@ def main():
             all_sprites_list.add(NodeSprite)
             NodeGroup.add(NodeSprite)
             
+        for i in range(0,len(NodeGroupInfo)): # Now we do the line connections
+            NodeConnectionsStr = str(NodeGroupInfo[i][2]) # Strip out connection strings for iterating through. Converting back from csv seems to lose matrix.
+            NodeConnectionsStrRem = NodeConnectionsStr[1:-1]
+            NodeConnectionsStrTem = NodeConnectionsStrRem.replace(" ","")
+            NodeConnectionsStrFin = NodeConnectionsStrTem.replace("'","")
+            print(NodeConnectionsStrFin)
+            if not NodeConnectionsStrFin: # Check if empty, 1st condition.
+                NodeConnectionName = []
+            else:            
+                fComma = 0
+                NodeConnectionName = []
+                startSlice = 0
+                if NodeConnectionsStrFin.count(','): # Check if more than 1 entry, 2nd condition. If so there should be a comma separating values.
+                    for j in range(0,NodeConnectionsStrFin.count(',')):
+                        fComma = NodeConnectionsStrFin.find(',',fComma)
+                        NodeConnectionName.append(NodeConnectionsStrFin[startSlice:fComma])
+                        fComma+=1
+                        startSlice = fComma
+                    NodeConnectionName.append(NodeConnectionsStrFin[startSlice:]) # Can't forget to add last name after last comma.
+                else:                                # If not, load the value into the first slot
+                    NodeConnectionName.append(NodeConnectionsStrFin)
+            print(NodeConnectionName)
+            if NodeConnectionName:
+                for l in range(0,len(NodeConnectionName)):
+                    startp_x, startp_y, finalp_x, finalp_y = connect(NodeGroupInfo[i][1], NodeConnectionName[l], NodeGroup) # Run function to determine positions of previous and current sprite. Should return 4 values - startp_x, startp_y, finalp_x, finalp_y                            
+                    LineSprite = Line(WHITE, startp_x, startp_y, finalp_x, finalp_y)
+                                
+                    H = finalp_y - startp_y 
+                    W = finalp_x - startp_x
+                    if H > 0 and W > 0:
+                        LineSprite.firstX = 0
+                        LineSprite.firstY = 0
+                        LineSprite.secondX = abs(W)
+                        LineSprite.secondY = abs(H)
+                        LineSprite.rect.x, LineSprite.rect.y = (startp_x,startp_y)
+                    elif H < 0 and W > 0:
+                        LineSprite.firstX = 0
+                        LineSprite.firstY = abs(H)
+                        LineSprite.secondX = abs(W)
+                        LineSprite.secondY = 0
+                        LineSprite.rect.x, LineSprite.rect.y = (startp_x,finalp_y)
+                    elif H < 0 and W < 0:
+                        LineSprite.firstX = abs(W)
+                        LineSprite.firstY = abs(H)
+                        LineSprite.secondX = 0
+                        LineSprite.secondY = 0
+                        LineSprite.rect.x, LineSprite.rect.y = (finalp_x,finalp_y)
+                    elif H > 0 and W < 0:
+                        LineSprite.firstX = abs(W)
+                        LineSprite.firstY = 0
+                        LineSprite.secondX = 0
+                        LineSprite.secondY = abs(H)
+                        LineSprite.rect.x, LineSprite.rect.y = (finalp_x,startp_y)
+                        
+                    LineSprite.connections.append(NodeGroupInfo[i][1])
+                    LineSprite.connections.append(NodeConnectionName[l])
+                    all_sprites_list.add(LineSprite)
+                    LineGroup.add(LineSprite)
+                    # Adding connection info to sprites after loading connections lines
+                    for sprite in NodeGroup:
+                        if sprite.text == NodeGroupInfo[i][1] and not (NodeConnectionName[l] in sprite.connections):
+                            sprite.connections.append(NodeConnectionName[l])
+                        if sprite.text == NodeConnectionName[l] and not (NodeGroupInfo[i][1] in sprite.connections):
+                            sprite.connections.append(NodeGroupInfo[i][1])
+                           
     # -- Main Loop --
     running = True
     while running:
@@ -258,8 +325,9 @@ def main():
             if event.type == pygame.QUIT:
                 NodeGroupInfo = []
                 for sprite in NodeGroup: # On Quit, create a list to save the locations and text of each node
-                    spriteinfo = [sprite.rect, sprite.text]
+                    spriteinfo = [sprite.rect, sprite.text, sprite.connections]
                     NodeGroupInfo.append(spriteinfo)
+                    print(spriteinfo)
                 #print(NodeGroupInfo) # Uncomment to have list of saved nodes printed to screen 
                 save_objects(NodeGroupInfo) # Call a function to create a csv file and save the list to it.
                 running = False
@@ -292,15 +360,20 @@ def main():
                     for sprite in LineGroup:
                         if sprite.rect.collidepoint(event.pos):
                             disconnect(sprite.connections, NodeGroup) # Function pulls associated node names from line.connections & clears them.
-                            sprite.kill                            
-                            sprite.color = BLACK
+                            sprite.kill()                            
+                            sprite.clear()
                             print("The line between ", sprite.connections[0], " and ", sprite.connections[1], " has been deleted.")
                             
-                if event.button == 3:
+                if event.button == 3 and (previousSpriteName): #Ensure there is a previous sprite selected before moving forward with adding a line.
                     for sprite in NodeGroup:
-                        if sprite.rect.collidepoint(event.pos):
+                        if sprite.rect.collidepoint(event.pos) and not (sprite.text == previousSpriteName):
                             #try:
+                            # Add connection text to each connected sprite. 
                             sprite.connections.append(previousSpriteName) # Add previous sprite name to current sprite's connections attribute list.
+                            for nxtsprite in NodeGroup:
+                                if nxtsprite.text == previousSpriteName:
+                                    nxtsprite.connections.append(sprite.text) # Repeat for other end of connection
+                            
                             startp_x, startp_y, finalp_x, finalp_y = connect(previousSpriteName, sprite.text, NodeGroup) # Run function to determine positions of previous and current sprite. Should return 4 values - startp_x, startp_y, finalp_x, finalp_y                            
                             LineSprite = Line(WHITE, startp_x, startp_y, finalp_x, finalp_y)
                                         
