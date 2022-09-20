@@ -1,5 +1,6 @@
 # Known Bugs
 #    - Friends Disappear if overlapping during grab.
+#    - Can not use apostrophes in text.
 
 import pygame
 import pygame.freetype
@@ -13,10 +14,6 @@ RED = (255,0,0)
 BLUE = (0,0,255)
 MENUBLUE = (0, 100, 255)
 GREEN = (0,255,0)
-Gravity = .5
-
-meSizeY = 50
-meSizeX = 50
 
 NodeTotalSizeY = 100
 NodeTotalSizeX = 100
@@ -30,23 +27,7 @@ NodeTextSize = 20
 LineWidth = 4
 startp_x = startp_y = 0
 
-# --- classes ---
-class Sprite(pygame.sprite.Sprite):
-    def __init__(self, color, width, height):
-        super().__init__()
-        
-        self.image = pygame.Surface([width, height])
-        self.image.fill(WHITE)
-        self.image.set_colorkey(WHITE)
-        
-        pygame.draw.ellipse(self.image, color, pygame.Rect(0,0,width,height))
-        
-        self.rect = self.image.get_rect()
-        self.id = ""
-        self.drag = False
-        self.atMenu = True
-        self.active = False
-        
+# --- classes ---        
 class SpriteRect(pygame.sprite.Sprite):   # Used to create the Menu, probably didn't have to use Classes for this in hindsight, could clean up
     def __init__(self, color, width, height):
         super().__init__()
@@ -58,7 +39,6 @@ class SpriteRect(pygame.sprite.Sprite):   # Used to create the Menu, probably di
         pygame.draw.rect(self.image, color, pygame.Rect(0,0,width,height), 5)
         
         self.rect = self.image.get_rect()
-        self.id = ""
         self.drag = False
         self.active = False
 
@@ -81,7 +61,6 @@ class Line(pygame.sprite.Sprite):   # Used to create the lines between nodes
         pygame.draw.line(self.image, self.color, (0, 0), (100, 100), LineWidth)
         self.rect = self.image.get_rect() # Do we need this?
         
-        self.id = ""
         self.drag = False
         self.active = False
         self.connections = []
@@ -110,7 +89,6 @@ class Node(pygame.sprite.Sprite):
         self.font.render_to(self.image, (NodeTextBufferX,NodeTextBufferY), self.text, nodetextcolor)
         
         self.rect = self.image.get_rect()
-        self.id = ""
         self.drag = False
         self.active = False
         self.atMenu = True
@@ -168,12 +146,12 @@ def connect(prevSP, currSP, NodeGroup): # Looks up and grabs positions of previo
     return startp_x, startp_y, finalp_x, finalp_y
 
 def disconnect(text, NodeGroup):  # remove the other sprite's name from the 1st sprite's connection list.
-    print(text)
+    #print(text)
     for sprite in NodeGroup:
         for k in range(0,len(sprite.connections)):
             if (sprite.connections[k] == text[0]) or (sprite.connections[k] == text[1]):
                 sprite.connections.pop(k)
-                #print("The line between ", sprite.connections[0], " and ", sprite.connections[1], " has been deleted.")
+                #print(sprite.connections)
 
 # --- main function --- Runs Once
 def main(): 
@@ -186,7 +164,7 @@ def main():
     screenflags = pygame.FULLSCREEN
     screen = pygame.display.set_mode((0,0))#,screenflags) # Add screenflags back in to go fullscreen.
     
-    pygame.display.set_caption("Simple Start in Pygame")
+    pygame.display.set_caption("NetworkVisualizer")
     screenH = screen.get_height() # Grab whatever screen size resulted from (0,0) above.
     screenW = screen.get_width() # Grab whatever screen size resulted from (0,0) above.
     menuBorder = ((screenW - (screenW / 6)),25) # Defines leftuppermost point of the menu
@@ -197,21 +175,13 @@ def main():
     all_sprites_list = pygame.sprite.Group() # Creates group for all pygame sprites
     NodeGroup = pygame.sprite.Group()
     LineGroup = pygame.sprite.Group()
-    
-    # Create Me
-    me = Sprite(BLUE, meSizeX, meSizeY) # Calls Sprite class with args(color, width, height)
-    me.rect.y = ((screenH - meSizeY) / 2)  # Rect coordintes to y postion of sprites top left corner; assigns intial location
-    me.rect.x = ((screenW - meSizeX) / 2) # Rect coordinates to x position of sprites top left corner; assigns intial location
-    me.id = "me"
-    all_sprites_list.add(me) # Add me to the total list
-    
+
     # Create Menu
     menu = SpriteRect(MENUBLUE, ((screenW / 6) - 25), (screenH - 100))
     menu.rect.x, menu.rect.y = menuBorder
-    menu.id = "menu"
     all_sprites_list.add(menu)
     
-    # Create Node
+    # Create Nodes
      # Create all nodes from file
     NodeGroupInfo = load_objects()
     if not NodeGroupInfo:
@@ -219,10 +189,18 @@ def main():
         # Create original layout of 1 node at menu 
         NodeSprite = Node(GREEN, NodeTextColor, NodeTotalSizeY, NodeTotalSizeX, UserText, NodeTextSize) 
         NodeSprite.rect.x, NodeSprite.rect.y = ((menuBorder[0] + 30), (menuBorder[1] + 30)) # Create Node that starts at menu
-        NodeSprite.id = "node"
         all_sprites_list.add(NodeSprite)
         NodeGroup.add(NodeSprite)
+        # Create origin node
+        me = Node(BLUE, NodeTextColor, NodeTotalSizeY, NodeTotalSizeX, UserText, NodeTextSize) # Calls Sprite class with args(color, width, height)
+        me.rect.y = ((screenH - NodeTotalSizeY) / 2)  # Rect coordintes to y postion of sprites top left corner; assigns intial location
+        me.rect.x = ((screenW - NodeTotalSizeX) / 2) # Rect coordinates to x position of sprites top left corner; assigns intial location
+        me.atMenu = False
+        all_sprites_list.add(me) # Add me to the total list
+        NodeGroup.add(me)
+
     else: # If there is a file uploaded successfully, load the position and text of all the nodes
+        print("Loading in any saved nodes and their connections.")
         for i in range(0,len(NodeGroupInfo)): # Clumsy method to strip out the 4 values of the csv sprite rect & draw the loaded nodes.
             NodeRect = str(NodeGroupInfo[i][0]) # First column (0) in csv matrix is the rect string
             #print(NodeRect) # Uncomment to have list of saved nodes printed to screen
@@ -243,7 +221,6 @@ def main():
             
             NodeSprite = Node(GREEN, NodeTextColor, NodeTotalSizeY, NodeTotalSizeX, NodeGroupInfo[i][1], NodeTextSize) # Second column (1) in csv matrix is the name string
             NodeSprite.rect = NodeFinalRect
-            NodeSprite.id = "node"
             if menu.rect.contains(NodeSprite.rect):
                 NodeSprite.atMenu = True
             else:
@@ -253,26 +230,21 @@ def main():
             
         for i in range(0,len(NodeGroupInfo)): # Now we do the line connections
             NodeConnectionsStr = str(NodeGroupInfo[i][2]) # Strip out connection strings for iterating through. Converting back from csv seems to lose matrix.
-            NodeConnectionsStrRem = NodeConnectionsStr[1:-1]
-            NodeConnectionsStrTem = NodeConnectionsStrRem.replace(" ","")
-            NodeConnectionsStrFin = NodeConnectionsStrTem.replace("'","")
-            print(NodeConnectionsStrFin)
-            if not NodeConnectionsStrFin: # Check if empty, 1st condition.
+            NodeConnectionsStrRem = NodeConnectionsStr[1:-1] # Strips first and last characters out.
+            #print(NodeConnectionsStrRem)
+            NodeConnectionName = []
+            fApost1 = fApost2 = 0
+            if NodeConnectionsStrRem.count("'"): # If there are 's in Node Connections String then splice between the two ' locations and append to Node Matrix.
+                for x in range(0,NodeConnectionsStrRem.count("'")-1):
+                    fApost1 = NodeConnectionsStrRem.find("'",fApost1)
+                    fApost2 = NodeConnectionsStrRem.find("'",(fApost1+1))
+                    if fApost1>-1:
+                        NodeConnectionName.append(NodeConnectionsStrRem[(fApost1+1):fApost2])
+                    fApost1=fApost2+1
+            else:
                 NodeConnectionName = []
-            else:            
-                fComma = 0
-                NodeConnectionName = []
-                startSlice = 0
-                if NodeConnectionsStrFin.count(','): # Check if more than 1 entry, 2nd condition. If so there should be a comma separating values.
-                    for j in range(0,NodeConnectionsStrFin.count(',')):
-                        fComma = NodeConnectionsStrFin.find(',',fComma)
-                        NodeConnectionName.append(NodeConnectionsStrFin[startSlice:fComma])
-                        fComma+=1
-                        startSlice = fComma
-                    NodeConnectionName.append(NodeConnectionsStrFin[startSlice:]) # Can't forget to add last name after last comma.
-                else:                                # If not, load the value into the first slot
-                    NodeConnectionName.append(NodeConnectionsStrFin)
-            print(NodeConnectionName)
+            #print(NodeConnectionName)
+            
             if NodeConnectionName:
                 for l in range(0,len(NodeConnectionName)):
                     startp_x, startp_y, finalp_x, finalp_y = connect(NodeGroupInfo[i][1], NodeConnectionName[l], NodeGroup) # Run function to determine positions of previous and current sprite. Should return 4 values - startp_x, startp_y, finalp_x, finalp_y                            
@@ -427,7 +399,6 @@ def main():
                     if  sprite.atMenu == True and not (menu.rect.contains(sprite.rect)): # If node leaves the menu, create another
                         NodeSprite = Node(GREEN, NodeTextColor, NodeTotalSizeY, NodeTotalSizeX, UserText, NodeTextSize)
                         NodeSprite.rect.x, NodeSprite.rect.y = ((menuBorder[0] + 30), (menuBorder[1] + 30))
-                        NodeSprite.id = "node"
                         all_sprites_list.add(NodeSprite)
                         NodeGroup.add(NodeSprite)
                         
@@ -449,6 +420,3 @@ def main():
 
 # ---- Call The Function ----
 main()
-
-
-
